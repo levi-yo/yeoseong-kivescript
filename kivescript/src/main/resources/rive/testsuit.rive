@@ -1,0 +1,156 @@
+//this file is test suit.
+
+//디버그모드 활성화 
+//! global debug = true
+//재귀 횟수 제한
+//! global depth = 50
+
+//begin기능, 사용자 질의가 왔을때 welcome predicate 값이 없다면 
+//웰컴 메시지 토픽으로 이동한다.(인사말)
+// > begin
+// 	+ request
+// 	* <get welcome> == undefined => <set welcome=true>{topic=welcome}{ok}
+// 	- {ok}
+// < begin
+// 
+// > topic welcome
+// 	+ *
+// 	- 안녕하세요. 저는 Rbot입니다.{topic=random}
+// < topic
+
+//substitution define
+! sub 나는 = 난
+
+//bot 변수 define
+! var name = Rbot
+
+//랜덤응답1,가중치(20+25+28 중에 해당 가중치만큼의 답변이 나감)
++ 아무말이나 해봐
+- 아무말이 뭐에요{weight=20}
+- 아무말{weight=25}
+- 아무런말임{weight=28}
+
+//랜덤응답1
++ 무슨말이라도 해봐
+- {random}아무말이에요|아무말이라도 할게요|랜덤답변{/random}
+
+
+//만약 챗봇생성시 설정값으로 concat설정을 하지 않았다면,
+//! local concat = value로 설정해줄 수 있다.
+//^(Continuation) 트리거
++ 챗봇이란 무엇이야?
+- 챗봇이란
+^ 사람이 질문을 하면 그 질문에 대한 답변을
+^ 자동으로 생성해주는 로봇이야.
+
+//"나는 누구야?"로 대체어 테스트
++ 난 누구야?
+- 당신은 사람입니다.
+
+//bot 변수 사용 테스트, <bot 변수명>
++ 넌 누구야?
+- 저는 <bot name>입니다.
+
+//와일드카드 사용 테스트
+//# - 숫자와 일치하는 와일드카드, _ 숫자를 제외한 공백&문자 일치 와일드카드, * = # + _
++ 난 _를 좋아해
+- 저도 <star1>를 좋아해요.
+
++ *
+- 무슨 말씀이신지 모르겠군요.
+
+//Alternatives and Optionals
+//와일드 카드와 같은 것을 사용하고 싶지만 가능한 단어를 몇 가지로 제한하고 싶을 경우
+//동일하게 <star> 태그를 이용할 수 있다.
++ 알앤비소프트 (전화번호|번호|전화)알려줘
+- 알앤비소프트 <star>는 031-111-1122입니다.
+
+//[]는 <star>사용불가, []앞뒤로 뛰어쓰기가 존재해야함.
++ 너희집 [전화] 번호 알려줘
+- 우리집 번호는 02-111-2111이야
+
+//배열선언, 공백 또는 "|"로 구분,또한 배열이 요소가 많을 경우 ^ 로 연결가능.
+! array colors = 빨강 노랑 파랑 검정
+//배열 사용,<star> 사용가능
+//괄호를 뺀다면 <star> 사용불가
++ 너 (@colors)색 좋아해?
+- 응, <star>색 좋아해
+
+//가중치
+//질의가 "google write perl script"라면 밑에 두개에 다걸린다.
+//가중치를 이용하여 임의로 패턴식을 조절할 수 있다.
++ google *{weight=10}
+- Google search: <a href="http://google.com/search?q=<star>">Click Here</a>
+
++ * perl script
+- You need Perl to run a Perl script.
+
+
+//srai 기능
++ 안녕하세요
+- 응, 안녕? 
+
++ 이름이 뭐니?
+- 내 이름은 Rbot이야
+
+
+//srai2
++ *는 뭐야?
+- <star>말씀하시는 거죠?
+^ {@ <star>}
+
++ 햄버거
+- 햄버거는 맛있는 것이에요.
+
+
+//% Previous,+ 에는 "."이 들어가면 안됨,%에는 특수문자가 모두 제거되야함
+! array foods = 피자 햄버거 치킨
+
++ (@foods) 주문할게요
+- 네, <star> 주문이 완료되었습니다.
+
+//<botstart>는 %에 있는 와일드카드값을 가져옴
++ 배송할게요
+% 네 * 주문이 완료되었습니다
+- <botstar> 배송이 완료되었습니다.
+
+//user predicate, <set 변수명=값> <get 변수명>
++ * 맛있어?
+- <set food=<star>>응, <get food> 맛있어!
+
+
+//condition
++ 내 이름이 뭐야?
+* <get name> == undefined => 이름을 알려주시지 않았어요.
+- 당신의 이름은 <get name>입니다.
+
++ 내 이름은 *이야
+- 안녕하세요. <set name=<star>><get name>님!
+
+//topic, 토픽은 상속도 가능하다(rpg.rive)
++ 난 너가 싫어
+- 정말이야? 나는 너가 사과 할 때까지 말하지 않을거야.{topic=사과}
+
+> topic 사과
+	
+	+ 미안해
+	- 괜찮아. 이번만 용서해줄게.{topic=random}
+	
+	+ *
+	- 빨리사과해!
+< topic
+
+
+
+//<input>,<reply>
+//<input><reply>는 해당 대화를 벗어난 이후에 바로 사용가능하다.
++ 대답해봐
+- <input>에 대한 답변입니다. 대답
+
++ 다시해봐
+- <reply1><input1>
+
+//<id>로 유저의 id를 가져온다. 해당 id로 사용자의 변수를 별도로 유지한다.
+//형태소분리 테스트
++ 안녕하세요 저는 윤여성이라고 합니다
+- 네, 안녕하세요? 저는 알봇입니다.

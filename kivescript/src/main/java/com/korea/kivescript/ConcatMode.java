@@ -27,6 +27,11 @@ package com.korea.kivescript;
  *
  * @author Marcel Overdijk
  */
+/**
+ * ^트리거를 처리할때, 문자열을 어떠한 구분자로 연결할지를 결정하는 enum
+ * @author yun-yeoseong
+ *
+ */
 public enum ConcatMode {
 
 	NONE(""), NEWLINE("\n"), SPACE(" ");

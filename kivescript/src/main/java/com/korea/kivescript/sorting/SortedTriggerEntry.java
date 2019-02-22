@@ -25,7 +25,8 @@ package com.korea.kivescript.sorting;
 import com.korea.kivescript.ast.Trigger;
 
 /**
- * Holds a sorted trigger and the pointer to that trigger's data
+ * 
+ * 정렬된 트리거와 해당 트리거의 데이터에 대한 포인터를 가지고 있는 객체
  *
  * @author Noah Petherbridge
  * @author Marcel Overdijk

@@ -37,7 +37,7 @@ import static java.util.Objects.requireNonNull;
 
 /**
  * Provides JSR-223 Scripting support for object macros in RiveScript.
- *
+ * 스크립트 매크로를 위한 스크립팅핸들러클래스.
  * @author Marcel Overdijk
  * @see ObjectHandler
  * @see com.korea.kivescript.lang.groovy.GroovyHandler
@@ -57,8 +57,8 @@ public class Jsr223ScriptingHandler implements ObjectHandler {
 	/**
 	 * Constructs a JSR-223 Scripting {@link ObjectHandler}.
 	 *
-	 * @param engineName         the short name of the desired {@link ScriptEngine}
-	 * @param functionCodeFormat the function code format
+	 * @param engineName         the short name of the desired {@link ScriptEngine},엔진이름(언어)
+	 * @param functionCodeFormat the function code format,함수코드 포맷
 	 */
 	public Jsr223ScriptingHandler(String engineName, String functionCodeFormat) {
 		this(engineName, functionCodeFormat, "object_");
@@ -107,10 +107,14 @@ public class Jsr223ScriptingHandler implements ObjectHandler {
 		} else {
 			long startTime = System.currentTimeMillis();
 
-			// Create a unique function name called the same as the object macro name.
+			/**
+			 * 유일한 매크로(함수)이름으로 함수코드를 문자열로 받환받는다.
+			 */
 			String function = resolveFunctionCode(name, code);
 
-			// Run the code to load the function into the script engine.
+			/**
+			 * 스크립트 엔진에 문자열 함수를 eval해준다.
+			 */
 			try {
 				scriptEngine.eval(function);
 				if (logger.isDebugEnabled()) {
@@ -170,7 +174,7 @@ public class Jsr223ScriptingHandler implements ObjectHandler {
 
 	/**
 	 * Resolves the code to create the function.
-	 *
+	 * functionCodeFormat을 이용하여 스크립트 함수를 정의한 문자열을 리턴
 	 * @param name the name of the object
 	 * @param code the source code inside the object
 	 * @return the source as string

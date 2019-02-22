@@ -32,11 +32,26 @@ import java.util.List;
  * @author Marcel Overdijk
  */
 public class Trigger {
-
+	
+	/**
+	 * "+"트리거에 해당하는 문자열
+	 */
 	private String trigger;
+	/**
+	 * 답변
+	 */
 	private List<String> reply;
+	/**
+	 * "*"에 해당하는 조건
+	 */
 	private List<String> condition;
+	/**
+	 * "@"에 해당하는 srai
+	 */
 	private String redirect;
+	/**
+	 * "%"에 해당하는 that
+	 */
 	private String previous;
 
 	public Trigger() {

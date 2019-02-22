@@ -34,12 +34,17 @@ import java.util.Map;
  * @author Marcel Overdijk
  */
 public class SortTrack {
-
-	private Map<Integer, List<SortedTriggerEntry>> atomic; // Sort by number of whole words
-	private Map<Integer, List<SortedTriggerEntry>> option; // Sort optionals by number of words
-	private Map<Integer, List<SortedTriggerEntry>> alpha;  // Sort alpha wildcards by no. of words
-	private Map<Integer, List<SortedTriggerEntry>> number; // Sort numeric wildcards by no. of words
-	private Map<Integer, List<SortedTriggerEntry>> wild;   // Sort wildcards by no. of words
+	
+	//밑의 트리거들을 제외한 모든 트리거를 포함.
+	private Map<Integer, List<SortedTriggerEntry>> atomic;
+	//"["을 가진 트리거, 키값으로 해당 트리거가 "["을 몇개를 포함하고 있는지.
+	private Map<Integer, List<SortedTriggerEntry>> option;
+	//"_"을 가진 트리거, 키값으로 해당 트리거가 "_"을 몇개를 포함하고 있는지.
+	private Map<Integer, List<SortedTriggerEntry>> alpha;
+	//"#"을 가진 트리거, 키값으로 해당 트리거가 "#"을 몇개를 포함하고 있는지.
+	private Map<Integer, List<SortedTriggerEntry>> number;
+	//"*"을 가진 트리거, 키값으로 해당 트리거가 "*"을 몇개를 포함하고 있는지.
+	private Map<Integer, List<SortedTriggerEntry>> wild;
 	private List<SortedTriggerEntry> pound;                // Triggers of just '#'
 	private List<SortedTriggerEntry> under;                // Triggers of just '_'
 	private List<SortedTriggerEntry> star;                 // Triggers of just '*'

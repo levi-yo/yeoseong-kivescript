@@ -23,10 +23,11 @@
 package com.korea.kivescript.parser;
 
 import com.korea.kivescript.ConcatMode;
+import com.korea.kivescript.MorphemeMode;
 
 /**
  * User-configurable properties of the RiveScript {@link Parser}.
- *
+ * 사용자정의 RiveScript 파서 설정, 빌더패턴으로 작성되어있다.
  * @author Noah Petherbridge
  * @author Marcel Overdijk
  */
@@ -36,6 +37,7 @@ public class ParserConfig {
 	private boolean utf8;
 	private boolean forceCase;
 	private ConcatMode concat;
+	private MorphemeMode morpheme = MorphemeMode.NONE_SEPARATION;
 
 	protected ParserConfig() {
 	}
@@ -75,7 +77,16 @@ public class ParserConfig {
 	public ConcatMode getConcat() {
 		return concat;
 	}
-
+	
+	/**
+	 * 형태소분리 모드를 반환한다.
+	 * 
+	 * @return 형태소분리 모드
+	 */
+	public MorphemeMode getMorpheme() {
+		return morpheme;
+	}
+	
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) {
@@ -147,6 +158,7 @@ public class ParserConfig {
 		private boolean utf8;
 		private boolean forceCase;
 		private ConcatMode concat;
+		private MorphemeMode morpheme = MorphemeMode.NONE_SEPARATION;
 
 		private Builder() {
 		}
@@ -194,7 +206,17 @@ public class ParserConfig {
 			this.concat = concat;
 			return this;
 		}
-
+		
+		/**
+		 * 형태소분리 모드를 설정한다.
+		 * 
+		 * @param morpheme 형태소분리모드
+		 * @return this Builder
+		 */
+		public Builder morpheme(MorphemeMode morpheme) {
+			this.morpheme = morpheme;
+			return this;
+		}
 		/**
 		 * Builds the parser config.
 		 *
@@ -206,6 +228,7 @@ public class ParserConfig {
 			config.utf8 = this.utf8;
 			config.forceCase = this.forceCase;
 			config.concat = this.concat;
+			config.morpheme = this.morpheme;
 			return config;
 		}
 	}

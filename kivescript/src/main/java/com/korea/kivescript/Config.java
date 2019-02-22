@@ -26,6 +26,7 @@ package com.korea.kivescript;
 import java.util.HashMap;
 import java.util.Map;
 import static com.korea.kivescript.ConcatMode.NONE;
+import static com.korea.kivescript.MorphemeMode.NONE_SEPARATION;
 import com.korea.kivescript.session.SessionManager;
 
 
@@ -35,20 +36,34 @@ import com.korea.kivescript.session.SessionManager;
  * @author Noah Petherbridge
  * @author Marcel Overdijk
  */
+/**
+ * RiveScript 인터프리터의 사용자설정 프로퍼티
+ * 빌더 패턴으로 Config 인스턴스를 생성한다.
+ * MorphemeMode - 형태소분리 모드 필드추가.
+ * @author yun-yeoseong
+ */
 public class Config {
 
 	/**
 	 * The default concat mode.
+	 * 기본 concat 모드 - NONE("")
 	 */
 	public static final ConcatMode DEFAULT_CONCAT = NONE;
-
+	
+	/**
+	 * 기본 형태소분리 모드 - NONE_SEPARATION
+	 */
+	public static final MorphemeMode DEFAULT_MORPHEME = NONE_SEPARATION;
+	
 	/**
 	 * The default recursion depth limit.
+	 * 기본 재귀 탐색 깊이 한계값. - DEFAULT_DEPTH = 50
 	 */
 	public static final int DEFAULT_DEPTH = 50;
 
 	/**
 	 * The default unicode punctuation pattern.
+	 * 기본 유니코드 구두점 패턴식.
 	 */
 	public static final String DEFAULT_UNICODE_PUNCTUATION_PATTERN = "[.,!?;:]";
 
@@ -58,6 +73,8 @@ public class Config {
 	private String unicodePunctuation = DEFAULT_UNICODE_PUNCTUATION_PATTERN;
 	private boolean forceCase;
 	private ConcatMode concat = DEFAULT_CONCAT;
+	//형태소분리 여부
+	private MorphemeMode morpheme = DEFAULT_MORPHEME;
 	private int depth = DEFAULT_DEPTH;
 	private SessionManager sessionManager;
 	private Map<String, String> errorMessages;
@@ -67,7 +84,7 @@ public class Config {
 
 	/**
 	 * Returns whether exception throwing is enabled.
-	 *
+	 * 예외 처리 사용 여부를 반환.
 	 * @return whether exception throwing is enabled
 	 */
 	public boolean isThrowExceptions() {
@@ -76,6 +93,7 @@ public class Config {
 
 	/**
 	 * Returns whether strict syntax checking is enabled.
+	 * 규칙이 엄격한 구문 검사 사용 여부를 반환.
 	 *
 	 * @return whether strict syntax checking is enabled
 	 */
@@ -85,7 +103,7 @@ public class Config {
 
 	/**
 	 * Returns whether UTF-8 mode is enabled for user messages and triggers.
-	 *
+	 * 사용자메시지와 트리거를 UTF-8 인코딩으로 사용할지 여부.
 	 * @return whether UTF-8 mode is enabled for user messages and triggers
 	 */
 	public boolean isUtf8() {
@@ -94,7 +112,7 @@ public class Config {
 
 	/**
 	 * Returns the unicode punctuation pattern.
-	 *
+	 * 유니코드 구두점 패턴식을 반환한다.
 	 * @return the unicode punctuation pattern
 	 */
 	public String getUnicodePunctuation() {
@@ -103,7 +121,7 @@ public class Config {
 
 	/**
 	 * Returns whether forcing triggers to lowercase is enabled.
-	 *
+	 * 강제로 소문자 치환 트리거를 사용하는지 여부 반환.
 	 * @return whether forcing triggers to lowercase is enabled
 	 */
 	public boolean isForceCase() {
@@ -112,16 +130,22 @@ public class Config {
 
 	/**
 	 * Returns the concat mode.
-	 *
+	 * concat 모드를 반환.
 	 * @return the concat mode
 	 */
 	public ConcatMode getConcat() {
 		return concat;
 	}
-
+	/**
+	 * 형태소분리 모드를 반환.
+	 * @return the morpheme mode.
+	 */
+	public MorphemeMode getMorpheme() {
+		return morpheme;
+	}
 	/**
 	 * Returns the recursion depth limit.
-	 *
+	 * 재귀 탐색 리밋 값 반환.
 	 * @return the recursion depth limit
 	 */
 	public int getDepth() {
@@ -130,7 +154,7 @@ public class Config {
 
 	/**
 	 * Returns the {@link SessionManager} for user variables.
-	 *
+	 * 사용자 변수를 위한 SessionManager 객체를 반환.
 	 * @return the session manager for user variables
 	 */
 	public SessionManager getSessionManager() {
@@ -139,7 +163,7 @@ public class Config {
 
 	/**
 	 * Returns the custom error message overrides.
-	 *
+	 * 사용자 정의 에러 메시지를 반환.
 	 * @return the custom error message overrides
 	 */
 	public Map<String, String> getErrorMessages() {
@@ -205,6 +229,7 @@ public class Config {
 				", unicodePunctuation='" + unicodePunctuation + '\'' +
 				", forceCase=" + forceCase +
 				", concat=" + concat +
+				", morpheme="+ morpheme +
 				", depth=" + depth +
 				", sessionManager=" + sessionManager +
 				", errorMessages=" + errorMessages +
@@ -213,7 +238,7 @@ public class Config {
 
 	/**
 	 * Converts this {@link Config} instance to a {@link Builder}.
-	 *
+	 * Config 인스턴스를 빌더 객체로 변환 후 반환.
 	 * @return the builder
 	 */
 	public Builder toBuilder() {
@@ -224,6 +249,7 @@ public class Config {
 				.unicodePunctuation(this.unicodePunctuation)
 				.forceCase(this.forceCase)
 				.concat(this.concat)
+				.morpheme(this.morpheme)
 				.depth(this.depth)
 				.sessionManager(this.sessionManager)
 				.errorMessages(this.errorMessages);
@@ -231,7 +257,7 @@ public class Config {
 
 	/**
 	 * Creates a basic {@link Config}. A basic config has all the defaults, plus {@code strict = true}.
-	 *
+	 * 기본 생성. 기본 생성 설정은 모두 기본값을 갖으며, strict = true 설정을 더한다.
 	 * @return the config
 	 */
 	public static Config basic() {
@@ -267,6 +293,7 @@ public class Config {
 		private String unicodePunctuation = DEFAULT_UNICODE_PUNCTUATION_PATTERN;
 		private boolean forceCase;
 		private ConcatMode concat = DEFAULT_CONCAT;
+		private MorphemeMode morpheme = DEFAULT_MORPHEME;
 		private int depth = DEFAULT_DEPTH;
 		private SessionManager sessionManager;
 		private Map<String, String> errorMessages;
@@ -339,6 +366,17 @@ public class Config {
 			this.concat = concat;
 			return this;
 		}
+		
+		/**
+		 * 형태소분리 모드를 설정한다.
+		 * 
+		 * @param morpheme 형태소분리 모드
+		 * @return this builder
+		 */
+		public Builder morpheme(MorphemeMode morpheme) {
+			this.morpheme = morpheme;
+			return this;
+		}
 
 		/**
 		 * Sets the recursion depth limit.
@@ -401,6 +439,7 @@ public class Config {
 			config.unicodePunctuation = this.unicodePunctuation;
 			config.forceCase = this.forceCase;
 			config.concat = this.concat;
+			config.morpheme = this.morpheme;
 			config.depth = this.depth;
 			config.sessionManager = this.sessionManager;
 			config.errorMessages = this.errorMessages;

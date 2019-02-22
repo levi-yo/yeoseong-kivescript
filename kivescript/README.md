@@ -1,4 +1,5 @@
 # RiveScript-Java - convert gradle project to maven project
+#                   + 한글 형태소 분석기 내장
 
 [![Gitter](https://badges.gitter.im/aichaos/rivescript-java.svg)](https://gitter.im/aichaos/rivescript-java?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 [![Build Status](https://travis-ci.org/aichaos/rivescript-java.svg?branch=master)](https://travis-ci.org/aichaos/rivescript-java)

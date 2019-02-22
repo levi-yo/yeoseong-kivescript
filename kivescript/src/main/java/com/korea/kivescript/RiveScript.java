@@ -45,6 +45,9 @@ import com.korea.kivescript.sorting.SortBuffer;
 import com.korea.kivescript.sorting.SortTrack;
 import com.korea.kivescript.sorting.SortedTriggerEntry;
 import com.korea.kivescript.util.StringUtils;
+
+import rnb.analyzer.nori.analyzer.NoriAnalyzer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -99,21 +102,27 @@ import static java.util.Objects.requireNonNull;
  * import com.korea.kivescript.RiveScript;
  *
  * // Create a new bot with the default settings.
+ * 기본 세팅으로 봇을 생성한다.
  * RiveScript bot = new RiveScript();
  *
  * // To enable UTF-8 mode, you'd have initialized the bot like:
+ * UTF-8 mode를 활성화하려면, 밑에와 같이 초기화한다.
  * RiveScript bot = new RiveScript(Config.utf8());
  *
  * // Load a directory full of RiveScript documents (.rive files)
+ * 모든 *.rive 문서를 읽으려면 밑에와 같이 한다.
  * bot.loadDirectory("./replies");
  *
  * // Load an individual file.
+ * 하나의 .rive 파일을 읽으려면 밑에와 같이 한다.
  * bot.LoadFile("./testsuite.rive");
  *
  * // Sort the replies after loading them!
+ * .rive파일을 로딩한 후에 응답을 정렬한다.
  * bot.sortReplies();
  *
  * // Get a reply.
+ * 응답을 얻어온다.
  * String reply = bot.reply("user", "Hello bot!");
  * </code>
  * </pre>
@@ -158,6 +167,7 @@ public class RiveScript {
 	private boolean utf8;
 	private boolean forceCase;
 	private ConcatMode concat;
+	private MorphemeMode morpheme;
 	private int depth;
 	private Pattern unicodePunctuation;
 	private Map<String, String> errorMessages;
@@ -180,6 +190,9 @@ public class RiveScript {
 
 	// State information.
 	private ThreadLocal<String> currentUser = new ThreadLocal<>();
+	
+	
+	private NoriAnalyzer analyzer = null;
 
 	/*------------------*/
 	/*-- Constructors --*/
@@ -187,6 +200,7 @@ public class RiveScript {
 
 	/**
 	 * Creates a new {@link RiveScript} interpreter.
+	 * 디폴트 생성자는 기본 설정으로 챗봇이 생성된다.
 	 */
 	public RiveScript() {
 		this(null);
@@ -194,7 +208,8 @@ public class RiveScript {
 
 	/**
 	 * Creates a new {@link RiveScript} interpreter with the given {@link Config}.
-	 *
+	 * 주어진 설정에 따라 인터프리터 인스턴스를 생성한다.
+	 * null일 경우, 기본 생성자의 설정을 따른다. 
 	 * @param config the config
 	 */
 	public RiveScript(Config config) {
@@ -207,15 +222,18 @@ public class RiveScript {
 		this.utf8 = config.isUtf8();
 		this.forceCase = config.isForceCase();
 		this.concat = config.getConcat();
+		this.morpheme = config.getMorpheme();
 		this.depth = config.getDepth();
 		this.sessions = config.getSessionManager();
 
 		String unicodePunctuation = config.getUnicodePunctuation();
+		//config의 유니코드 구두점 패턴식이 존재하지 않으면 기본 구두점 패턴식을 리턴한다.
 		if (unicodePunctuation == null) {
 			unicodePunctuation = Config.DEFAULT_UNICODE_PUNCTUATION_PATTERN;
 		}
 		this.unicodePunctuation = Pattern.compile(unicodePunctuation);
-
+		
+		//에러메시지를 세팅한다.
 		this.errorMessages = new HashMap<>();
 		this.errorMessages.put(DEEP_RECURSION_KEY, DEFAULT_DEEP_RECURSION_MESSAGE);
 		this.errorMessages.put(REPLIES_NOT_SORTED_KEY, DEFAULT_REPLIES_NOT_SORTED_MESSAGE);
@@ -232,31 +250,37 @@ public class RiveScript {
 				this.errorMessages.put(entry.getKey(), entry.getValue());
 			}
 		}
-
+		
+		//기본 concat모드 설정
 		if (this.concat == null) {
 			this.concat = Config.DEFAULT_CONCAT;
 			logger.debug("No concat config: using default {}", Config.DEFAULT_CONCAT);
 		}
-
+		
+		//기본 재귀 탐색깊이 설정
 		if (this.depth <= 0) {
 			this.depth = Config.DEFAULT_DEPTH;
 			logger.debug("No depth config: using default {}", Config.DEFAULT_DEPTH);
 		}
-
+		
+		//기본 세션매니저 객체등록
 		if (this.sessions == null) {
 			this.sessions = new ConcurrentHashMapSessionManager();
 			logger.debug("No SessionManager config: using default ConcurrentHashMapSessionManager");
 		}
 
 		// Initialize the parser.
+		//파서 초기화
 		this.parser = new Parser(ParserConfig.newBuilder()
 				.strict(this.strict)
 				.utf8(this.utf8)
 				.forceCase(this.forceCase)
 				.concat(this.concat)
+				.morpheme(this.morpheme)
 				.build());
 
 		// Initialize all the data structures.
+		//모든 데이터 구조를 초기화한다.
 		this.global = new HashMap<>();
 		this.vars = new HashMap<>();
 		this.sub = new HashMap<>();
@@ -273,7 +297,7 @@ public class RiveScript {
 
 	/**
 	 * Returns the RiveScript library version, or {@code null} if it cannot be determined.
-	 *
+	 * RiveScript 라이브러리 버전을 반환하거나, 확인할 수없는 경우 "null"을 반환합니다.
 	 * @return the version
 	 * @see Package#getImplementationVersion()
 	 */
@@ -360,7 +384,7 @@ public class RiveScript {
 
 	/**
 	 * Sets a custom language handler for RiveScript object macros.
-	 *
+	 * RiveScript 객체 매크로를 위한 사용자 지정 프로그래밍언어 처리기를 설정
 	 * @param name    the name of the programming language
 	 * @param handler the implementation
 	 */
@@ -370,7 +394,7 @@ public class RiveScript {
 
 	/**
 	 * Removes an object macro language handler.
-	 *
+	 * 하나의 객체 매크로 언어 처리기를 제거한다.
 	 * @param name the name of the programming language
 	 */
 	public void removeHandler(String name) {
@@ -389,7 +413,7 @@ public class RiveScript {
 
 	/**
 	 * Returns the object macro language handlers (unmodifiable).
-	 * .
+	 * 객체 매크로 프로그래밍언어 처리기를 담은 수정불가능한(Read only) 맵객체를 반환한다.
 	 * @return the object macro language handlers
 	 */
 	public Map<String, ObjectHandler> getHandlers() {
@@ -398,9 +422,10 @@ public class RiveScript {
 
 	/**
 	 * Defines a Java object macro.
+	 * 자바 객체 매크로를 정의.
 	 * <p>
 	 * Because Java is a compiled language, this method must be used to create an object macro written in Java.
-	 *
+	 * 자바는 컴파일 언어이기에, 이 메소드는 자바로 객체 매크로를 작성할 때 반드시 사용되어야한다.
 	 * @param name       the name of the object macro for the `<call>` tag
 	 * @param subroutine the subroutine
 	 */
@@ -410,7 +435,7 @@ public class RiveScript {
 
 	/**
 	 * Removes a Java object macro.
-	 *
+	 * 자바 객체 매크로를 제거한다.
 	 * @param name the name of the object macro
 	 */
 	public void removeSubroutine(String name) {
@@ -419,7 +444,7 @@ public class RiveScript {
 
 	/**
 	 * Returns the Java object macros (unmodifiable).
-	 *
+	 * 자바 객체 매크로를 수정불가능한 맵으로 반환한다.
 	 * @return the Java object macros
 	 */
 	public Map<String, Subroutine> getSubroutines() {
@@ -428,9 +453,10 @@ public class RiveScript {
 
 	/**
 	 * Sets a global variable.
+	 * 전역 변수를 설정한다.
 	 * <p>
 	 * This is equivalent to {@code ! global} in RiveScript. Set the value to {@code null} to delete a global.
-	 *
+	 * 이 메소드는 RiveScript에서 ! global과 동등하다. 전역변수를 제거하려면 값을 "null"로 설정한다.
 	 * @param name  the variable name
 	 * @param value the variable value or {@code null}
 	 */
@@ -439,6 +465,9 @@ public class RiveScript {
 			global.remove(name);
 		} else if (name.equals("depth")) {
 			try {
+				/**
+				 * global varialble key 값이 "depth"인 경우, 재귀 임계치로 설정한다.
+				 */
 				depth = Integer.parseInt(value);
 			} catch (NumberFormatException e) {
 				logger.warn("Can't set global 'depth' to '{}': {}", value, e.getMessage());
@@ -450,9 +479,10 @@ public class RiveScript {
 
 	/**
 	 * Returns a global variable.
+	 * 전역 변수를 반환한다.
 	 * <p>
 	 * This is equivalent to {@code <env>} in RiveScript. Returns {@code null} if the variable isn't defined.
-	 *
+	 * 이 메소드는 RiveScript에서 {@code <env>}와 동등하다. 만약 변수가 정의되지 않았다면 "null"을 리턴한다.
 	 * @param name the variable name
 	 * @return the variable value or {@code null}
 	 */
@@ -466,9 +496,10 @@ public class RiveScript {
 
 	/**
 	 * Sets a bot variable.
+	 * 챗봇 변수를 세팅한다.
 	 * <p>
 	 * This is equivalent to {@code ! vars} in RiveScript. Set the value to {@code null} to delete a bot variable.
-	 *
+	 * 이 메소드는 RiveScript에서 {@code ! vars}과 동등하다. 챗봇 변수를 제거하려면 값을 "null"로 설정한다.
 	 * @param name  the variable name
 	 * @param value the variable value or {@code null}
 	 */
@@ -482,9 +513,10 @@ public class RiveScript {
 
 	/**
 	 * Returns a bot variable.
+	 * 챗봇 변수를 반환한다.
 	 * <p>
 	 * This is equivalent to {@code <bot>} in RiveScript. Returns {@code null} if the variable isn't defined.
-	 *
+	 * 이 메소드는 RiveScript에서 {@code <bot>}과 동등하다. 만약 정의되지 않은 변수라면 "null"을 반환한다.
 	 * @param name the variable name
 	 * @return the variable value or {@code null}
 	 */
@@ -494,7 +526,7 @@ public class RiveScript {
 
 	/**
 	 * Returns all bot variables.
-	 *
+	 * 설정된 챗봇 변수 모두를 Map으로 반환한다.
 	 * @return the variable map
 	 */
 	public Map<String, String> getVariables() {
@@ -503,9 +535,10 @@ public class RiveScript {
 
 	/**
 	 * Sets a substitution pattern.
+	 * 치환 패턴을 설정한다.
 	 * <p>
 	 * This is equivalent to {@code ! sub} in RiveScript. Set the value to {@code null} to delete a substitution.
-	 *
+	 * 이 메소드는 RiveScript에서 {@code ! sub}와 동등하다. 만약 치환자를 제거하고 싶다면 값을 "null"로 설정한다.
 	 * @param name  the substitution name
 	 * @param value the substitution pattern or {@code null}
 	 */
@@ -519,9 +552,10 @@ public class RiveScript {
 
 	/**
 	 * Returns a substitution pattern.
+	 * 치환 패턴을 반환한다.
 	 * <p>
 	 * Returns {@code null} if the substitution isn't defined.
-	 *
+	 * 만약 정의되지 않은 치환자라면 "null"을 반환한다.
 	 * @param name the substitution name
 	 * @return the substitution pattern or {@code null}
 	 */
@@ -559,9 +593,10 @@ public class RiveScript {
 
 	/**
 	 * Checks whether deep recursion is detected.
+	 * 설정된 깊이보다 더 재귀가 깊게 들어가는지 체크한다. 예외설정을 하였다면 예외를, 아니면 warn log를 출력.
 	 * <p>
 	 * Throws a {@link DeepRecursionException} in case exception throwing is enabled, otherwise logs a warning.
-	 *
+	 * 
 	 * @param depth   the recursion depth counter
 	 * @param message the message to log
 	 * @return whether deep recursion is detected
@@ -584,7 +619,7 @@ public class RiveScript {
 
 	/**
 	 * Loads a single RiveScript document from disk.
-	 *
+	 * 하나의 .rive 파일을 로드한다.
 	 * @param file the RiveScript file
 	 * @throws RiveScriptException in case of a loading error
 	 * @throws ParserException     in case of a parsing error
@@ -594,6 +629,7 @@ public class RiveScript {
 		logger.debug("Loading RiveScript file: {}", file);
 
 		// Run some sanity checks on the file.
+		// 파일 상태에 따른 예외 발생.
 		if (!file.exists()) {
 			throw new RiveScriptException("File '" + file + "' not found");
 		} else if (!file.isFile()) {
@@ -605,6 +641,7 @@ public class RiveScript {
 		List<String> code = new ArrayList<>();
 
 		// Slurp the file's contents.
+		// 파일의 내용을 버퍼리더로 모두 읽어오면서 리스트 객체에 넣는다.
 		try (BufferedReader br = new BufferedReader(new FileReader(file))) {
 			String line;
 			while ((line = br.readLine()) != null) {
@@ -613,13 +650,13 @@ public class RiveScript {
 		} catch (IOException e) {
 			throw new RiveScriptException("Error reading file '" + file + "'", e);
 		}
-
+		
 		parse(file.toString(), code.toArray(new String[0]));
 	}
 
 	/**
 	 * Loads a single RiveScript document from disk.
-	 *
+	 * 하나의 .rive 파일을 로드한다.
 	 * @param path the path to the RiveScript document
 	 * @throws RiveScriptException in case of a loading error
 	 * @throws ParserException     in case of a parsing error
@@ -631,7 +668,8 @@ public class RiveScript {
 
 	/**
 	 * Loads multiple RiveScript documents from a directory on disk.
-	 *
+	 * .rive 파일들이 담겨있는 Directory를 전체 로드한다.
+	 * extenstions 파라미터로 확장자를 더 추가 할 수 있다.
 	 * @param directory the directory containing the RiveScript documents
 	 * @throws RiveScriptException in case of a loading error
 	 * @throws ParserException     in case of a parsing error
@@ -691,7 +729,7 @@ public class RiveScript {
 
 	/**
 	 * Loads RiveScript source code from a text buffer, with line breaks after each line.
-	 *
+	 * 문자열 RiveScript code를 load한다. 개행 단위로 짤라서 파싱한다.
 	 * @param code the RiveScript source code
 	 * @throws ParserException in case of a parsing error
 	 */
@@ -716,16 +754,20 @@ public class RiveScript {
 
 	/**
 	 * Parses the RiveScript source code into the bot's memory.
-	 *
-	 * @param filename the arbitrary name for the source code being parsed
-	 * @param code     the lines of RiveScript source code
+	 * 챗봇 메모리에 RiveScript 스크립트 코드를 파싱한다.
+	 * @param filename the arbitrary name for the source code being parsed,파일의 절대경로.
+	 * @param code     the lines of RiveScript source code,파일에서 읽어온 RiveScript 스크립트 코드 배열.
 	 * @throws ParserException in case of a parsing error
 	 */
 	private void parse(String filename, String[] code) throws ParserException {
-		// Get the abstract syntax tree of this file.
+		/**
+		 * 파서에서 파싱처리후 Root트리를 반환한다.
+		 */
 		Root ast = this.parser.parse(filename, code);
 
-		// Get all of the "begin" type variables.
+		/**
+		 * .rive파일에서 파싱된 defined 요소들을 모두 챗봇 객체의 인스턴스 변수에 설정해준다.
+		 */
 		for (Map.Entry<String, String> entry : ast.getBegin().getGlobal().entrySet()) {
 			if (entry.getValue().equals(UNDEF_TAG)) {
 				this.global.remove(entry.getKey());
@@ -761,13 +803,20 @@ public class RiveScript {
 				this.array.put(entry.getKey(), entry.getValue());
 			}
 		}
-
-		// Consume all the parsed triggers.
+		
+		/**
+		 * 파싱된 트리거를 모두 챗봇에 설정한다.
+		 */
 		for (Map.Entry<String, Topic> entry : ast.getTopics().entrySet()) {
+			/**
+			 * 추상구문트리에서 토픽을 모두 꺼내온다.
+			 */
 			String topic = entry.getKey();
 			Topic data = entry.getValue();
 
-			// Keep a map of the topics that are included/inherited under this topic.
+			/**
+			 * 만약 해당 토픽에 포함된 토픽 혹은 상속된 토픽이 존재한다면 챗봇에 초기화해준다.
+			 */
 			if (!this.includes.containsKey(topic)) {
 				this.includes.put(topic, new HashMap<String, Boolean>());
 			}
@@ -775,20 +824,26 @@ public class RiveScript {
 				this.inherits.put(topic, new HashMap<String, Boolean>());
 			}
 
-			// Merge in the topic inclusions/inherits.
+			/**
+			 * 초기화된 상속,포함 토픽에 데이터를 설정해준다.
+			 */
 			for (String included : data.getIncludes().keySet()) {
 				this.includes.get(topic).put(included, true);
 			}
 			for (String inherited : data.getInherits().keySet()) {
 				this.inherits.get(topic).put(inherited, true);
 			}
-
-			// Initialize the topic structure.
+			
+			/**
+			 * 토픽트리를 초기화해준다.
+			 */
 			if (!this.topics.containsKey(topic)) {
 				this.topics.put(topic, new Topic());
 			}
-
-			// Consume the AST triggers into the brain.
+			
+			/**
+			 * 파싱된 트리거들을 모두 챗봇의 토픽트리에 설정해준다.
+			 */
 			for (Trigger astTrigger : data.getTriggers()) {
 				// Convert this AST trigger into an internal trigger.
 				Trigger trigger = new Trigger();
@@ -802,9 +857,14 @@ public class RiveScript {
 			}
 		}
 
-		// Load all the parsed objects.
+		/**
+		 * 파싱된 개체 매크로들을 챗봇에 설정해준다.
+		 */
 		for (ObjectMacro object : ast.getObjects()) {
-			// Have a language handler for this?
+			/**
+			 * 파싱된 개체 매크로들을 챗봇에 설정하기 위해서는 챗봇 초기화단계에서 
+			 * 개체 핸들러들이 등록되어있어야한다.
+			 */
 			if (this.handlers.containsKey(object.getLanguage())) {
 				this.handlers.get(object.getLanguage()).load(this, object.getName(), object.getCode().toArray(new String[0]));
 				this.objectLanguages.put(object.getName(), object.getLanguage());
@@ -820,66 +880,79 @@ public class RiveScript {
 	/*---------------------*/
 
 	/**
-	 * Sorts the reply structures in memory for optimal matching.
-	 * <p>
-	 * After finishing loading the RiveScript code, this method needs to be called to populate the various sort buffers.
-	 * This is absolutely necessary for reply matching to work efficiently!
+	 * 메모리 내에서 최적의 매칭을 위해 답변의 구조를 정렬한다.
+	 * 이 버퍼를 통하여 답변 매칭을 아주 효율적으로 해준다.
 	 */
 	public void sortReplies() {
-		// (Re)initialize the sort cache.
+		/**
+		 * SortBuffer를 초기화한다.
+		 */
 		this.sorted.getTopics().clear();
 		this.sorted.getThats().clear();
 		logger.debug("Sorting triggers...");
 
-		// Loop through all the topics.
+		/**
+		 * 모든 토픽에 대한 반복문을 통해 정렬한다.
+		 */
 		for (String topic : this.topics.keySet()) {
 			logger.debug("Analyzing topic {}", topic);
 
-			// Collect a list of all the triggers we're going to worry about.
-			// If this topic inherits another topic, we need to recursively add those to the list as well.
+			/**
+			 * 우리가 작성하여 파싱된 모든 트리거를 리스트로 수집한다.
+			 * 해당 요소 토픽이 다른 토픽을 상속하고 있다면, 재귀적으로 리스트에 상속토픽을 추가한다.
+			 * 
+			 * getTopicTriggers(String topic, boolean hasThats, int depth,int inheritance, boolean inherited)
+			 */
 			List<SortedTriggerEntry> allTriggers = getTopicTriggers(topic, false, 0, 0, false);
 
-			// Sort these triggers.
+			/**
+			 * 트리거셋을 정렬한다.
+			 */
 			this.sorted.addTopic(topic, sortTriggerSet(allTriggers, true));
 
-			// Get all of the %Previous triggers for this topic.
+			/**
+			 * % Previous를 가지고있는 트리거셋
+			 */
 			List<SortedTriggerEntry> thatTriggers = getTopicTriggers(topic, true, 0, 0, false);
 
-			// And sort them, too.
+			/**
+			 * % Previous 가진 트리거셋 정렬
+			 */
 			this.sorted.addThats(topic, sortTriggerSet(thatTriggers, false));
 		}
 
-		// Sort the substitution lists.
+		/**
+		 * 문자 길이순으로 정렬한다.(DESC)
+		 */
 		this.sorted.setSub(sortList(this.sub.keySet()));
 		this.sorted.setPerson(sortList(this.person.keySet()));
 	}
 
 	/**
-	 * Recursively scans topics and collects triggers therein.
 	 * <p>
-	 * This method scans through a topic and collects its triggers, along with the triggers belonging to any topic that's inherited by or
-	 * included by the parent topic. Some triggers will come out with an {@code {inherits}} tag to signify inheritance depth.
+	 * 토픽을 재귀적으로 스캔하고 트리거를 수집한다.
+	 * 이 메소드는 토픽을 검색하여 상속하거나 포함하는 주제에 속하는 트리거와 함께 트리거를 수집한다.
+	 * 일부 트리거는 상속 깊이를 나타 내기위해 {@code inherits} 태그를 사용한다.
 	 * <p>
-	 * Keep in mind here that there is a difference between 'includes' and 'inherits' -- topics that inherit other topics are able to
-	 * OVERRIDE triggers that appear in the inherited topic. This means that if the top topic has a trigger of simply {@code *}, then NO
-	 * triggers are capable of matching in ANY inherited topic, because even though {@code *} has the lowest priority, it has an automatic
-	 * priority over all inherited topics.
+	 * "상속"과"포함"은 차이가 있다.
+	 * 다른 토픽을 상속한 토픽은 상속한 토픽에 정의된 트리거를 OVERRIDE 할 수 있다. 이것은 만약 상위 토픽에 "*"트리거가 있을 경우, 상속받은 토픽은
+	 * 어떠한 트리거도 매핑되지 않을 수 있다. 왜냐하면 "*"의 단순 트리거가 우선순위는 낮지만, 상속된 모든 트리거는 상속받은 트리거보다 우선순위가 있기 때문이다.
 	 * <p>
-	 * The {@link #getTopicTriggers(String, boolean, int, int, boolean)} method takes this into account. All topics that inherit other
-	 * topics will have their triggers prefixed with a fictional {@code {inherits}} tag, which would start at {@code {inherits=0}} and
-	 * increment if this topic has other inheriting topics. So we can use this tag to make sure topics that inherit things will have their
-	 * triggers always be on top of the stack, from {@code inherits=0} to {@code inherits=n}.
+	 * 다른 토픽을 상속받은 토픽은 inherits가 0부터 시작하고 상속하고 있는 토픽이 증가할 때 마다 그 값이 증가하는 inherits 태그로 프리픽스된 트리거를 갖는다.
+	 * 그래서 우리는 이 태그를 이용하여 상속받은 토픽은 inherits = 0~n 까지로 부터 항상 스택의 상위로 위치 시킬 수 있다.
 	 * <p>
-	 * Important info about the {@code depth} vs. {@code inheritance} params to this function:
-	 * {@code depth} increments by 1 each time this method recursively calls itself. {@code inheritance} increments by 1 only when this
-	 * topic inherits another topic.
+	 * depth는 재귀호출을 할때마다 1씩 증가한다.inheritance는 다른 토픽을 상속할때마다 1씩증가한다.
+	 * <p>
+	 * 만약, > topic a includes b inherits c 라면,
+	 * a&b는 함께 결합되어 매칭풀에 들어가고, 또한 이 결합된 매칭들은 c라는 상위 우선순위를 갖는다.
 	 * <p>
 	 * This way, {@code > topic alpha includes beta inherits gamma} will have this effect:
 	 * alpha and beta's triggers are combined together into one matching pool, and then those triggers have higher priority than gamma's.
 	 * <p>
 	 * The {@code inherited} option is {@code true} if this is a recursive call, from a topic that inherits other topics. This forces the
 	 * {@code {inherits}} tag to be added to the triggers. This only applies when the top topic 'includes' another topic.
-	 *
+	 * 
+	 * 
 	 * @param topic       the name of the topic to scan through
 	 * @param thats       indicates to get replies with {@code %Previous} or not
 	 * @param depth       the recursion depth counter
@@ -888,26 +961,41 @@ public class RiveScript {
 	 * @return the list of triggers
 	 */
 	private List<SortedTriggerEntry> getTopicTriggers(String topic, boolean thats, int depth, int inheritance, boolean inherited) {
-		// Break if we're in too deep.
+		/**
+		 * 초기설정한 깊이보다 깊다면 예외를 발생시키거나, 빈 리스트를 반환한다.
+		 */
 		if (checkDeepRecursion(depth, "Deep recursion while scanning topic inheritance!")) {
 			return new ArrayList<>();
 		}
 
 		logger.debug("Collecting trigger list for topic {} (depth={}; inheritance={}; inherited={})", topic, depth, inheritance, inherited);
 
-		// Collect an array of triggers to return.
+		/**
+		 * 반환된 트리거를 수집한다.
+		 */
 		List<SortedTriggerEntry> triggers = new ArrayList<>();
 
-		// Get those that exist in this topic directly.
+		/**
+		 * 현재 토픽의 트리거를 담는 리스트
+		 */
 		List<SortedTriggerEntry> inThisTopic = new ArrayList<>();
+		
 		if (this.topics.containsKey(topic)) {
 			for (Trigger trigger : this.topics.get(topic).getTriggers()) {
+				
+				/**
+				 * "%"가 없는 경우는 모든 트리거를 추가한다.
+				 * 현 트리거의 답변과 자기자신을 가르키는 트리거 객체를 넣는다.
+				 */
 				if (!thats) {
-					// All triggers.
 					SortedTriggerEntry entry = new SortedTriggerEntry(trigger.getTrigger(), trigger);
 					inThisTopic.add(entry);
 				} else {
-					// Only triggers that have %Previous.
+					/**
+					 * "%"가 있는 트리거
+					 * 만약 현 트리거가 thats이 존재한다면 
+					 * 이전 답변과 이전답변 이후에 나오는 현재 트리거객체를 넣는다.
+					 */
 					if (trigger.getPrevious() != null) {
 						SortedTriggerEntry entry = new SortedTriggerEntry(trigger.getPrevious(), trigger);
 						inThisTopic.add(entry);
@@ -916,15 +1004,19 @@ public class RiveScript {
 			}
 		}
 
-		// Does this topic include others?
+		/**
+		 * 만약 다른 트리거를 포함하고 있다면?
+		 */
 		if (this.includes.containsKey(topic)) {
 			for (String includes : this.includes.get(topic).keySet()) {
 				logger.debug("Topic {} includes {}", topic, includes);
 				triggers.addAll(getTopicTriggers(includes, thats, depth + 1, inheritance + 1, false));
 			}
 		}
-
-		// Does this topic inherit others?
+		
+		/**
+		 * 다른 토픽을 상속받았다면?
+		 */
 		if (this.inherits.containsKey(topic)) {
 			for (String inherits : this.inherits.get(topic).keySet()) {
 				logger.debug("Topic {} inherits {}", topic, inherits);
@@ -932,8 +1024,10 @@ public class RiveScript {
 			}
 		}
 
-		// Collect the triggers for *this* topic. If this topic inherits any other topics, it means that this topic's triggers have higher
-		// priority than those in any inherited topics. Enforce this with an {inherits} tag.
+		/**
+		 * 만약 상속받은 토픽이거나 inherited가 true일 경우, 트리거에 inherits 태그를 라벨링한다.
+		 * 그리고 이 토픽의 트리거는 상속받은 트리거보다 우선순위가 높다.(우선순위는 inherits 태그로 판단한다.)
+		 */
 		if ((this.inherits.containsKey(topic) && this.inherits.get(topic).size() > 0) || inherited) {
 			for (SortedTriggerEntry trigger : inThisTopic) {
 				logger.debug("Prefixing trigger with {inherits={}} {}", inheritance, trigger.getTrigger());
@@ -950,17 +1044,17 @@ public class RiveScript {
 	}
 
 	/**
-	 * Sorts a group of triggers in an optimal sorting order.
+	 * 최적의 정렬 순서로 트리거를 정렬한다.
 	 * <p>
 	 * This function has two use cases:
 	 * <p>
 	 * <ol>
-	 * <li>Create a sort buffer for "normal" (matchable) triggers, which are triggers that are NOT accompanied by a {@code %Previous} tag.
-	 * <li>Create a sort buffer for triggers that had {@code %Previous} tags.
+	 * <li>"% Previous"를 포함하지 않는 "normal"한 트리거 정렬버퍼를 생성한다.
+	 * <li>"% Previous"를 포함하고 있는 트리거 정렬버퍼를 생성한다.
 	 * </ol>
 	 * <p>
 	 * Use the {@code excludePrevious} parameter to control which one is being done.
-	 * This function will return a list of {@link SortedTriggerEntry} items, and it's intended to have no duplicate trigger patterns
+	 * 이 메소드는 중복된 트리거 패턴을 가지지 않는 정렬된 트리거 리스트를 반환한다.
 	 * (unless the source RiveScript code explicitly uses the same duplicate pattern twice, which is a user error).
 	 *
 	 * @param triggers        the triggers to sort
@@ -968,10 +1062,14 @@ public class RiveScript {
 	 * @return the sorted triggers
 	 */
 	private List<SortedTriggerEntry> sortTriggerSet(List<SortedTriggerEntry> triggers, boolean excludePrevious) {
-		// Create a priority map, of priority numbers -> their triggers.
+		/**
+		 * 트리거 우선순위 맵을 만든다.
+		 */
 		Map<Integer, List<SortedTriggerEntry>> priority = new HashMap<>();
 
-		// Go through and bucket each trigger by weight (priority).
+		/**
+		 * weight 태그가 있는지 본다.(default 0).
+		 */
 		for (SortedTriggerEntry trigger : triggers) {
 			if (excludePrevious && trigger.getPointer().getPrevious() != null) {
 				continue;
@@ -1000,6 +1098,9 @@ public class RiveScript {
 		for (Integer k : priority.keySet()) {
 			sortedPriorities.add(k);
 		}
+		/**
+		 * weight를 내림차순으로 정렬한다.
+		 */
 		Collections.sort(sortedPriorities);
 		Collections.reverse(sortedPriorities);
 
@@ -1007,12 +1108,12 @@ public class RiveScript {
 		for (Integer p : sortedPriorities) {
 			logger.debug("Sorting triggers with priority {}", p);
 
-			// So, some of these triggers may include an {inherits} tag, if they came from a topic which inherits another topic.
-			// Lower inherits values mean higher priority on the stack.
-			// Triggers that have NO inherits value at all (which will default to -1),
-			// will be moved to the END of the stack at the end (have the highest number/lowest priority).
-			int inherits = -1;        // -1 means no {inherits} tag
-			int highestInherits = -1; // Highest number seen so far
+			/**
+			 * 다른 토픽을 상속받은 토픽일 수 있기 때문에 일부는 inherits 태그를 포함하고 있다.
+			 * inherits값이 작을 수록 스택에서 높은 우선순위를 가진다.
+			 */
+			int inherits = -1;        // -1 값은 inherits하지 않은 것임을 뜻함.
+			int highestInherits = -1; // 지금까지 본 가장 큰 수
 
 			// Loop through and categorize these triggers.
 			Map<Integer, SortTrack> track = new HashMap<>();
@@ -1044,7 +1145,9 @@ public class RiveScript {
 
 				// Start inspecting the trigger's contents.
 				if (pattern.contains("_")) {
-					// Alphabetic wildcard included.
+					/**
+					 * "_"가 몇개 포함되어있는지 카운팅한다.
+					 */
 					int count = countWords(pattern, false);
 					logger.debug("Has a _ wildcard with {} words", count);
 					if (count > 0) {
@@ -1056,7 +1159,9 @@ public class RiveScript {
 						track.get(inherits).getUnder().add(trigger);
 					}
 				} else if (pattern.contains("#")) {
-					// Numeric wildcard included.
+					/**
+					 * "#"가 몇개 포함되어있는지 카운팅한다.
+					 */
 					int count = countWords(pattern, false);
 					logger.debug("Has a # wildcard with {} words", count);
 					if (count > 0) {
@@ -1068,7 +1173,9 @@ public class RiveScript {
 						track.get(inherits).getPound().add(trigger);
 					}
 				} else if (pattern.contains("*")) {
-					// Wildcard included.
+					/**
+					 * "*"가 몇개 포함되어있는지 카운팅한다.
+					 */
 					int count = countWords(pattern, false);
 					logger.debug("Has a * wildcard with {} words", count);
 					if (count > 0) {
@@ -1080,7 +1187,9 @@ public class RiveScript {
 						track.get(inherits).getStar().add(trigger);
 					}
 				} else if (pattern.contains("[")) {
-					// Optionals included.
+					/**
+					 * "["가 몇개 포함되어있는지 카운팅한다.
+					 */
 					int count = countWords(pattern, false);
 					logger.debug("Has optionals with {} words", count);
 					if (!track.get(inherits).getOption().containsKey(count)) {
@@ -1098,29 +1207,40 @@ public class RiveScript {
 				}
 			}
 
-			// Move the no-{inherits} triggers to the bottom of the stack.
+			/**
+			 * inherits를 가지지않은 트리거들은 항상 inherits 중 가장 우선순위가 낮은 트리거의
+			 * 바로 낮은 우선순위를 가진 트리거로 스택에 쌓인다.
+			 */
 			track.put(highestInherits + 1, track.get(-1));
 			track.remove(-1);
 
-			// Sort the track from the lowest to the highest.
+			/**
+			 * inherits를 기준으로 정렬한다.(ASC)
+			 */
 			List<Integer> trackSorted = new ArrayList<>();
 			for (Integer k : track.keySet()) {
 				trackSorted.add(k);
 			}
 			Collections.sort(trackSorted);
 
-			// Go through each priority level from greatest to smallest.
+			/**
+			 * 우선순위가 높은 순서대로 SortedTriggerEntry에 추가한다.
+			 */
 			for (Integer ip : trackSorted) {
 				logger.debug("ip={}", ip);
 
-				// Sort each of the main kinds of triggers by their word counts.
+				/**
+				 * 단어수(각각의 와일드카드수)로 정렬
+				 */
 				running.addAll(sortByWords(track.get(ip).getAtomic()));
 				running.addAll(sortByWords(track.get(ip).getOption()));
 				running.addAll(sortByWords(track.get(ip).getAlpha()));
 				running.addAll(sortByWords(track.get(ip).getNumber()));
 				running.addAll(sortByWords(track.get(ip).getWild()));
 
-				// Add the single wildcard triggers, sorted by length.
+				/**
+				 * 단일 와일드카드 트리거를 문자 길이별로 정렬
+				 */
 				running.addAll(sortByLength(track.get(ip).getUnder()));
 				running.addAll(sortByLength(track.get(ip).getPound()));
 				running.addAll(sortByLength(track.get(ip).getStar()));
@@ -1172,27 +1292,33 @@ public class RiveScript {
 	}
 
 	/**
-	 * Sorts a set of triggers by word count and overall length.
+	 * 단어 수(각각의 와일드카드수)와 전체 길이로 트리거 세트를 정렬합니다.
 	 * <p>
-	 * This is a helper function for sorting the {@code atomic}, {@code option}, {@code alpha}, {@code number} and
-	 * {@code wild} attributes of the {@link SortTrack} and adding them to the running sort buffer in that specific order.
-	 *
+	 * 이것은 SortTrack의 {@code atomic}, {@code option}, {@code alpha},
+	 * {@code number} 및 {@code wild} 속성을 정렬하고 특정 순서로 정렬 버퍼를 실행 중입니다.
 	 * @param triggers the triggers to sort
 	 * @return the sorted triggers
 	 */
 	private List<SortedTriggerEntry> sortByWords(Map<Integer, List<SortedTriggerEntry>> triggers) {
-		// Sort the triggers by their word counts from greatest to smallest.
+		/**
+		 * 단어수(각각의 와일드카드수)로 정렬을 진행한다.
+		 */
 		List<Integer> sortedWords = new ArrayList<>();
 		for (Integer wc : triggers.keySet()) {
 			sortedWords.add(wc);
 		}
+		/**
+		 * 단어수(각각의 와일드카드수)가 많은 순서대로 정렬
+		 */
 		Collections.sort(sortedWords);
 		Collections.reverse(sortedWords);
 
 		List<SortedTriggerEntry> sorted = new ArrayList<>();
 
 		for (Integer wc : sortedWords) {
-			// Triggers with equal word lengths should be sorted by overall trigger length.
+			/**
+			 * 단어수가 같다면 전체 문장길이로 정렬
+			 */
 			List<String> sortedPatterns = new ArrayList<>();
 			Map<String, List<SortedTriggerEntry>> patternMap = new HashMap<>();
 
@@ -1203,6 +1329,9 @@ public class RiveScript {
 				}
 				patternMap.get(trigger.getTrigger()).add(trigger);
 			}
+			/**
+			 * 문장길이로 정렬
+			 */
 			Collections.sort(sortedPatterns, byLengthReverse());
 
 			// Add the triggers to the sorted triggers bucket.
@@ -1279,7 +1408,7 @@ public class RiveScript {
 	/*---------------------*/
 
 	/**
-	 * Returns a reply from the bot for a user's message.
+	 * 사용자 메시지에 대한 챗봇의 응답을 반환한다.
 	 * <p>
 	 * In case of an exception and exception throwing is enabled a {@link RiveScriptException} is thrown.
 	 * Check the subclasses to see which types exceptions can be thrown.
@@ -1294,11 +1423,20 @@ public class RiveScript {
 
 		long startTime = System.currentTimeMillis();
 
-		// Store the current user's ID.
+		/**
+		 * 현재 사용자 아이디를 저장한다.
+		 * ThreadLocal을 이용하여 하나의 스레드 전과정에서
+		 * 해당 유저정보를 사용한다. 
+		 * 웹환경은 여러개의 스레드가 떠서 동작함으로 
+		 * 잘못된 데이터 참조가 있을 수 있으므로 반드시 마지막에
+		 * ThreadLocal.remove(); 해주어야한다.
+		 */
 		this.currentUser.set(username);
 
 		try {
-			// Initialize a user profile for this user?
+			/**
+			 * 사용자의 세션정보 초기화
+			 */
 			this.sessions.init(username);
 
 			// Format their message.
@@ -1306,7 +1444,9 @@ public class RiveScript {
 
 			String reply;
 
-			// If the BEGIN block exists, consult it first.
+			/**
+			 * BEGIN block이 존재한다면 먼저 처리한다.
+			 */
 			if (this.topics.containsKey("__begin__")) {
 				String begin = getReply(username, "request", true, 0);
 
@@ -1348,7 +1488,9 @@ public class RiveScript {
 	 * @return the reply
 	 */
 	private String getReply(String username, String message, boolean isBegin, int step) {
-		// Needed to sort replies?
+		/**
+		 * 만약 트리거들을 sort하지 않았다면 예외발생 혹은 로그를 출력한다
+		 */
 		if (this.sorted.getTopics().size() == 0) {
 			logger.warn("You forgot to call sortReplies()!");
 			String errorMessage = this.errorMessages.get(REPLIES_NOT_SORTED_KEY);
@@ -1357,34 +1499,45 @@ public class RiveScript {
 			}
 			return errorMessage;
 		}
-
-		// Collect data on this user.
+		
+		/**
+		 * 현재 사용자의 데이터를 수집한다.
+		 */
 		String topic = this.sessions.get(username, "topic");
 		if (topic == null) {
 			topic = "random";
 		}
+		
 		List<String> stars = new ArrayList<>();
 		List<String> thatStars = new ArrayList<>();
 		String reply = null;
 
-		// Avoid letting them fall into a missing topic.
+		/**
+		 * topic이 존재하지 않는다면 random으로 설정해준다.
+		 */
 		if (!this.topics.containsKey(topic)) {
 			logger.warn("User {} was in an empty topic named '{}'", username, topic);
 			topic = "random";
 			this.sessions.set(username, "topic", topic);
 		}
 
-		// Avoid deep recursion.
+		/**
+		 * 재귀깊이 체크
+		 */
 		if (checkDeepRecursion(step, "Deep recursion while getting reply!")) {
 			return this.errorMessages.get(DEEP_RECURSION_KEY);
 		}
 
-		// Are we in the BEGIN block?
+		/**
+		 * isBegin == true라면 토픽을 "__begin__"으로 설정
+		 */
 		if (isBegin) {
 			topic = "__begin__";
 		}
 
-		// More topic sanity checking.
+		/**
+		 * begin여부 확인후 다시 토픽 존재여부 확인.
+		 */
 		if (!this.topics.containsKey(topic)) {
 			// This was handled before, which would mean topic=random and it doesn't exist. Serious issue!
 			String errorMessage = this.errorMessages.get(DEFAULT_TOPIC_NOT_FOUND_KEY);
@@ -1399,10 +1552,13 @@ public class RiveScript {
 		String matchedTrigger = null;
 		boolean foundMatch = false;
 
-		// See if there were any %Previous's in this topic, or any topic related to it.
-		// This should only be done the first time -- not during a recursive redirection.
 		// This is because in a redirection, "lastReply" is still gonna be the same as it was the first time,
 		// resulting in an infinite loop!
+		/**
+		 * 해당 토픽에 "% Previous" 혹은 관련된 토픽이 있는지 확인
+		 * 이 작업은 재귀적인 리다이렉션 중이 아닌 처음에 수행되어야한다.
+		 * 리다이렉션에서 "lastReply"는 처음과 동일 할 것이므로 무한 루프가 발생한다.
+		 */
 		if (step == 0) {
 			List<String> allTopics = new ArrayList<>(Arrays.asList(topic));
 			if (this.includes.get(topic).size() > 0 || this.inherits.get(topic).size() > 0) {
@@ -1410,22 +1566,30 @@ public class RiveScript {
 				allTopics = getTopicTree(topic, 0);
 			}
 
-			// Scan them all.
+			/**
+			 * 모든 토픽을 조회한다.
+			 */
 			for (String top : allTopics) {
 				logger.debug("Checking topic {} for any %Previous's", top);
 
 				if (this.sorted.getThats(top).size() > 0) {
 					logger.debug("There's a %Previous in this topic!");
 
-					// Get the bot's last reply to the user.
+					/**
+					 * 사용자의 세션에서 이전 답변에 대한 정보를 가져온다.
+					 */
 					History history = this.sessions.getHistory(username);
 					String lastReply = history.getReply().get(0);
 
-					// Format the bot's reply the same way as the human's.
+					/**
+					 * 챗봇의 이전 응답을 포맷팅해준다
+					 */
 					lastReply = formatMessage(lastReply, true);
 					logger.debug("Bot's last reply: {}", lastReply);
 
-					// See if it's a match.
+					/**
+					 * 매칭해본다
+					 */
 					for (SortedTriggerEntry trigger : this.sorted.getThats(top)) {
 						String pattern = trigger.getPointer().getPrevious();
 						String botside = triggerRegexp(username, pattern);
@@ -1693,7 +1857,7 @@ public class RiveScript {
 
 	/**
 	 * Formats a user's message for safe processing.
-	 *
+	 * 사용자의 메시지를 안전한 프로세스를 위해 형식화한다.
 	 * @param message  the user's message
 	 * @param botReply whether it is a bot reply or not
 	 * @return the formatted message
@@ -1701,9 +1865,25 @@ public class RiveScript {
 	private String formatMessage(String message, boolean botReply) {
 		// Lowercase it.
 		message = "" + message;
+		
+		/**
+		 * 만약 형테소분리 모드라면 사용자 질의를 전처리.
+		 * By yeoseong_yoon
+		 */
+		if(this.morpheme.equals(MorphemeMode.SEPARATION)) {
+			analyzer = new NoriAnalyzer();
+			message = analyzer.analyzeForString(message);
+			logger.info("Morpheme user question :::: {}",message);
+		}
+		
+		/**
+		 * 만약 형태소분리모드 상태이면 이미 소문자처리가 되서 나오므로 굳이 처리할 필요 없음
+		 */
 		message = message.toLowerCase();
 
-		// Run substitutions and sanitize what's left.
+		/**
+		 * 사용자질의 substitute 처리
+		 */
 		message = substitute(message, this.sub, this.sorted.getSub());
 
 		// In UTF-8 mode, only strip metacharacters and HTML brackets (to protect against obvious XSS attacks).
@@ -2122,7 +2302,9 @@ public class RiveScript {
 	 * @return the substituted message
 	 */
 	private String substitute(String message, Map<String, String> subs, List<String> sorted) {
-		// Safety checking.
+		/**
+		 * substitute 요소가 없으면 그대로 리턴
+		 */
 		if (subs == null || subs.size() == 0) {
 			return message;
 		}
@@ -2130,7 +2312,10 @@ public class RiveScript {
 		// Make placeholders each time we substitute something.
 		List<String> ph = new ArrayList<>();
 		int pi = 0;
-
+		
+		/**
+		 * sort된 substitute를 이용하여 처리한다.
+		 */
 		for (String pattern : sorted) {
 			String result = subs.get(pattern);
 			String qm = quoteMetacharacters(pattern);
@@ -2167,21 +2352,23 @@ public class RiveScript {
 	}
 
 	/**
-	 * Returns an array of every topic related to a topic (all the topics it inherits or includes,
-	 * plus all the topics included or inherited by those topics, and so on).
-	 * The array includes the original topic, too.
-	 *
+	 * 해당 토픽과 관련된 모든 토픽(상속,포함)의 리스트르 반환한다.(원래 토픽도 포함)
+	 * 관련된 토픽의 관련된 토픽 또한 추가
 	 * @param topic the name of the topic
 	 * @param depth the recursion depth counter
 	 * @return the list of topic names
 	 */
 	private List<String> getTopicTree(String topic, int depth) {
-		// Break if we're in too deep.
+		/**
+		 * 깊이체크
+		 */
 		if (checkDeepRecursion(depth, "Deep recursion while scanning topic tree!")) {
 			return new ArrayList<>();
 		}
 
-		// Collect an array of all topics.
+		/**
+		 * 모든 관련된 토픽과 원래 토픽을 리스트로 반환
+		 */
 		List<String> topics = new ArrayList<>(Arrays.asList(topic));
 		for (String includes : this.topics.get(topic).getIncludes().keySet()) {
 			topics.addAll(getTopicTree(includes, depth + 1));
@@ -2194,7 +2381,7 @@ public class RiveScript {
 	}
 
 	/**
-	 * Prepares a trigger pattern for the regular expression engine.
+	 * 정규 표현 엔진의 트리거 패턴을 준비한다
 	 *
 	 * @param username the username
 	 * @param pattern  the pattern
