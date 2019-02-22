@@ -238,12 +238,12 @@ public class Parser {
 				 */
 				if(this.morpheme.equals(MorphemeMode.SEPARATION)) {
 					
-					
 					NoriAnalyzer analyzer = new NoriAnalyzer();
 					
 					line = analyzer.analyzeForString(line);
 					
 					logger.info("Morpheme knowledge :::: {}",line);
+					
 				}
 				
 				line = line.toLowerCase();
