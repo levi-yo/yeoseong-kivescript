@@ -10,6 +10,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import com.korea.kivescript.lang.javascript.JavaScriptHandler;
+import com.korea.kivescript.session.DBSessionManager;
 
 @SpringBootApplication
 public class KivescriptBootApplication implements CommandLineRunner{
@@ -35,6 +36,7 @@ public class KivescriptBootApplication implements CommandLineRunner{
 		RiveScript riveScript = new RiveScript(Config.newBuilder()
 													 .utf8(true)
 													 .concat(ConcatMode.SPACE)
+													 .sessionManager(new DBSessionManager())
 													 .build());
 		riveScript.setHandler("javascript", new JavaScriptHandler());
 		riveScript.loadFile(RiveScript.class.getClassLoader().getResource("rive/startup.rive").getFile());
