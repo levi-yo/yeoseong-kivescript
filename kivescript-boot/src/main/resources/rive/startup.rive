@@ -4,3 +4,10 @@
 
 + kivescript startup test
 - I'm alive !
+^ <call>startup</call>
+
+> object startup javascript
+	var kiveScriptStartUp = Java.type("com.korea.kivescript.KiveScriptStartUp");
+	var startUp = new kiveScriptStartUp();
+	return startUp.startUpMacro();
+< object
