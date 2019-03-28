@@ -1,3 +1,10 @@
+
++ 의도명_1
+- 의도명_1 답
+
++ message type
+- {"messageType":"CARD","textMessage":{"text":"텍스트"},"cardMessages":[{"title":"타이틀","mediaMessage":{"mediaType":"IMAGE","url":"https://google.com","messageButton":{"buttonType":"LINK","label":"자세히 보기","url":"https://www.naver.com"}},"description":"설명"}]}
+
 //this file is test suit.
 
 //디버그모드 활성화 

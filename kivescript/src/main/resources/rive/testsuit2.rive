@@ -1,0 +1,10 @@
++ kivescript startup test
+- I'm alive ! <set name=yeoseong>
+^ <call>startup <get name></call>
+
+> object startup javascript
+	var param = args[0];
+	if(param != '' || param !='undefined' || param != undefined){
+		return rs.getUservar('yeoseong','name')+ '님 안녕하세요';
+	} 
+< object
